@@ -38,49 +38,45 @@ window.addEventListener('message', function (event) {
         
         console.log("新的分數已接收:", scoreText); 
 
-        // [關鍵修改] H5P 成績送出後，顯示 p5.js Canvas
+        // H5P 成績送出後，顯示 p5.js Canvas
         if (p5CanvasWrapper) {
-            // 成績出來時，確保覆蓋層顯示
             p5CanvasWrapper.style.display = 'block'; 
             
-            // 由於 H5P 內容在載入後可能改變尺寸，這裡重新呼叫一次定位修正
+            // 重新定位一次，以防 H5P 內容在分數出來後有微小調整
             repositionCanvasWrapper(); 
         }
     }
 }, false);
 
-// [新增] 修正定位的函式，用於 setup 和 H5P 內容調整尺寸時
+// [關鍵修正] 修正定位的函式，使用 position: fixed 相對於視埠定位
 function repositionCanvasWrapper() {
     const h5pContainer = document.getElementById('h5pContainer');
     if (!h5pContainer || !p5CanvasWrapper) return;
     
-    // 獲取 H5P 容器相對於視埠的絕對位置和尺寸
+    // 獲取 H5P 容器相對於視埠的絕對位置和尺寸 (最可靠的定位方法)
     const rect = h5pContainer.getBoundingClientRect();
     
-    // 獲取 H5P 容器的父元素
-    const commonParent = h5pContainer.parentNode;
+    // [關鍵修正] 1. 使用 position: fixed 確保絕對覆蓋，無視父元素布局
+    p5CanvasWrapper.style.position = 'fixed'; 
     
-    // 計算相對於父元素的位置
-    const parentRect = commonParent.getBoundingClientRect();
-    
-    // [修正] 使用 getBoundingClientRect() 來計算準確的 top 和 left
-    p5CanvasWrapper.style.position = 'absolute'; 
-    p5CanvasWrapper.style.top = (rect.top - parentRect.top) + 'px'; 
-    p5CanvasWrapper.style.left = (rect.left - parentRect.left) + 'px';
+    // [關鍵修正] 2. 直接使用 getBoundingClientRect() 提供的視埠座標
+    p5CanvasWrapper.style.top = rect.top + 'px'; 
+    p5CanvasWrapper.style.left = rect.left + 'px';
     
     p5CanvasWrapper.style.width = rect.width + 'px';
     p5CanvasWrapper.style.height = rect.height + 'px';
     p5CanvasWrapper.style.zIndex = '10'; // 確保 Canvas 覆蓋在 H5P 之上
     p5CanvasWrapper.style.pointerEvents = 'none'; // 讓滑鼠點擊穿透
 
-    // 如果 Canvas 已經創建，調整其大小
+    // 調整 Canvas 大小
     if (window.p5Instance) {
         window.p5Instance.resizeCanvas(rect.width, rect.height);
     }
 }
 
-// [新增] 監聽視窗尺寸變化，確保覆蓋層保持準確
+// 監聽視窗尺寸變化，確保覆蓋層保持準確
 window.addEventListener('resize', repositionCanvasWrapper);
+
 
 // =================================================================
 // 步驟二：p5.js 初始化與繪製
@@ -96,36 +92,28 @@ function setup() {
         return;
     } 
 
-    const commonParent = h5pContainer.parentNode;
-
-    // 1. 確保父元素是相對定位
-    if (window.getComputedStyle(commonParent).position === 'static') {
-        commonParent.style.position = 'relative';
-        console.log("已設定 H5P 容器父元素為 position: relative 進行覆蓋定位。");
-    }
-
-    // 2. 創建 p5.js Canvas 專屬的覆蓋容器 (Wrapper)
+    // 1. 創建 p5.js Canvas 專屬的覆蓋容器 (Wrapper)
     p5CanvasWrapper = document.createElement('div');
     p5CanvasWrapper.id = 'p5-overlay';
     
-    // 3. 將 wrapper 插入到 DOM 中 (在 H5P 容器之前)
-    commonParent.insertBefore(p5CanvasWrapper, h5pContainer);
-    
-    // 4. 初始化 Canvas 尺寸
+    // 2. 將 wrapper 插入到 DOM 中 (直接插入到 body)
+    document.body.appendChild(p5CanvasWrapper); 
+
+    // 3. 初始化 Canvas 尺寸
     const rect = h5pContainer.getBoundingClientRect();
     const canvas = createCanvas(rect.width, rect.height);
 
-    // 5. 將 Canvas 附加到新創建的覆蓋容器中
+    // 4. 將 Canvas 附加到新創建的覆蓋容器中
     canvas.parent(p5CanvasWrapper); 
     
-    // 6. [關鍵] 初始時隱藏 Canvas，並進行初次定位
+    // 5. 初始時隱藏 Canvas，並進行初次定位
     p5CanvasWrapper.style.display = 'none';
-    repositionCanvasWrapper();
+    repositionCanvasWrapper(); // 執行定位
 
-    // 7. 儲存 p5 實例，以便在外面調整 Canvas 尺寸
+    // 6. 儲存 p5 實例
     window.p5Instance = this; 
     
-    background(0); // 黑色背景，適合煙火
+    background(0); 
     colorMode(HSB, 255); 
     gravity = createVector(0, 0.2); 
 } 

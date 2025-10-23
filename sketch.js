@@ -5,7 +5,7 @@
 let finalScore = 0; 
 let maxScore = 0;
 // [修正] 設定初始文字，避免畫面一片空白
-let scoreText = "等待 H5P 成績接收中..."; 
+let scoreText = "請完成上方答題..."; 
 
 let fireworks = []; 
 let explosionSound; 

@@ -4,23 +4,27 @@
 
 let finalScore = 0; 
 let maxScore = 0;
-// [修正] 設定初始文字，避免畫面一片空白
-let scoreText = "請完成上方答題..."; 
+let scoreText = "等待 H5P 成績接收中..."; 
+let p5CanvasWrapper; // 全域變數：儲存動態創建的覆蓋容器
 
 let fireworks = []; 
 let explosionSound; 
 let gravity; 
 
 // =================================================================
-// 預載音效 (!!! 必須確保 explosion.mp3 檔案存在 !!!)
+// 預載音效
 // -----------------------------------------------------------------
 function preload() {
     if (typeof loadSound === 'function') {
-        // 假設音效檔案名為 explosion.mp3
-        explosionSound = loadSound('explosion.mp3'); 
+        explosionSound = loadSound('explosion.mp3', () => {
+            console.log("音效載入完成。");
+        }, (err) => {
+             // 載入失敗不影響視覺效果
+             console.error("載入音效失敗，請檢查 explosion.mp3 路徑:", err);
+        }); 
         explosionSound.setVolume(0.5); 
     } else {
-        console.warn("p5.sound.js 未載入或 loadSound 未定義。煙火音效將被禁用。");
+        console.warn("p5.sound.js 未載入。煙火音效將被禁用。");
     }
 }
 
@@ -34,6 +38,11 @@ window.addEventListener('message', function (event) {
         scoreText = `最終成績分數: ${finalScore}/${maxScore}`;
         
         console.log("新的分數已接收:", scoreText); 
+
+        // [關鍵修改] H5P 成績送出後，顯示 p5.js Canvas
+        if (p5CanvasWrapper) {
+            p5CanvasWrapper.style.display = 'block';
+        }
     }
 }, false);
 
@@ -43,19 +52,59 @@ window.addEventListener('message', function (event) {
 // -----------------------------------------------------------------
 
 function setup() { 
-    createCanvas(windowWidth / 2, windowHeight / 2); 
-    background(0); // 黑色背景
-    colorMode(HSB, 255); // 使用 HSB 顏色模式
-    gravity = createVector(0, 0.2); // 定義重力向量
-    // 原有的 noLoop(); **已移除**，draw() 將持續循環
+    
+    // 1. 找到 H5P 容器
+    const h5pContainer = document.getElementById('h5pContainer');
+    
+    if (!h5pContainer) {
+        console.error("錯誤：找不到 #h5pContainer 元素。請確保 index.html 中有 <div id=\"h5pContainer\">。");
+        // 如果找不到 H5P 容器，使用預設大小在 Body 內繪製
+        createCanvas(windowWidth / 2, windowHeight / 2);
+    } else {
+        const commonParent = h5pContainer.parentNode;
+
+        // 2. [純 JS 設置 CSS] 確保父元素是相對定位，讓 Canvas Wrapper 可以絕對定位
+        if (window.getComputedStyle(commonParent).position === 'static') {
+            commonParent.style.position = 'relative';
+            console.log("已設定 H5P 容器父元素為 position: relative 進行覆蓋定位。");
+        }
+
+        // 3. 創建 p5.js Canvas 專屬的覆蓋容器 (Wrapper)
+        p5CanvasWrapper = document.createElement('div');
+        p5CanvasWrapper.id = 'p5-overlay';
+
+        // 4. [純 JS 注入 CSS] 樣式以實現覆蓋 H5P 內容
+        p5CanvasWrapper.style.position = 'absolute';
+        p5CanvasWrapper.style.top = h5pContainer.offsetTop + 'px';
+        p5CanvasWrapper.style.left = h5pContainer.offsetLeft + 'px';
+        p5CanvasWrapper.style.width = h5pContainer.offsetWidth + 'px';
+        p5CanvasWrapper.style.height = h5pContainer.offsetHeight + 'px';
+        p5CanvasWrapper.style.zIndex = '10'; // 確保 Canvas 覆蓋在 H5P 之上
+        p5CanvasWrapper.style.pointerEvents = 'none'; // 讓滑鼠點擊穿透
+        
+        // 5. 將 wrapper 插入到 DOM 中 (在 H5P 容器之前)
+        commonParent.insertBefore(p5CanvasWrapper, h5pContainer);
+        
+        // 6. 創建 p5.js Canvas，尺寸與 H5P 容器一致
+        const canvas = createCanvas(h5pContainer.offsetWidth, h5pContainer.offsetHeight);
+        
+        // 7. 將 Canvas 附加到新創建的覆蓋容器中
+        canvas.parent(p5CanvasWrapper); 
+
+        // 8. 初始時隱藏 Canvas
+        p5CanvasWrapper.style.display = 'none';
+    }
+    
+    background(0); // 黑色背景，適合煙火
+    colorMode(HSB, 255); 
+    gravity = createVector(0, 0.2); 
 } 
 
 function draw() { 
-    // 關鍵：使用半透明黑色背景 (Alpha=25) 創造煙火的殘影拖尾效果
+    // 使用半透明黑色背景 (Alpha=25) 創造煙火的殘影拖尾效果
     colorMode(HSB, 255);
     background(0, 0, 0, 25); 
 
-    // 避免除以零錯誤
     let percentage = (maxScore > 0) ? (finalScore / maxScore) * 100 : 0; 
 
     // -----------------------------------------------------------------
@@ -95,7 +144,6 @@ function draw() {
         text("成績良好，請再接再厲。", width / 2, height / 2 - 50);
         
     } else {
-        // [修正] 如果未收到分數或分數為零，使用較亮的顏色確保看得見
         fill(0, 0, 200); // HSB 亮灰色
         text(scoreText, width / 2, height / 2);
     }
@@ -175,7 +223,7 @@ class Particle {
 // -----------------------------------------------------------------
 class Firework {
     constructor() {
-        this.hu = random(255); // 隨機顏色
+        this.hu = random(255); 
         this.firework = new Particle(random(width), height, this.hu, true); 
         this.exploded = false;
         this.particles = [];
@@ -202,7 +250,6 @@ class Firework {
     }
 
     explode() {
-        // 播放爆炸音效
         if (explosionSound && typeof explosionSound.isLoaded === 'function' && explosionSound.isLoaded()) {
             explosionSound.play();
         }
